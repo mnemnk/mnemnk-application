@@ -81,14 +81,16 @@ struct ApplicationAgent {
     config: AgentConfig,
     last_event: Option<ApplicationEvent>,
     ignore: HashSet<String>,
+    notify_rx: tokio::sync::mpsc::Receiver<()>,
 }
 
 impl ApplicationAgent {
-    fn new(config: AgentConfig) -> Self {
+    fn new(config: AgentConfig, notify_rx: tokio::sync::mpsc::Receiver<()>) -> Self {
         Self {
             ignore: config.ignore.clone().into_iter().collect(),
             config,
             last_event: None,
+            notify_rx,
         }
     }
 
@@ -118,16 +120,22 @@ impl ApplicationAgent {
                 // Handle Ctrl+C
                 _ = ctrl_c() => {
                     log::info!("\nShutting down mnemnk-application.");
-                    break;
+                    std::process::exit(0);
+                }
+
+                // macOS: NSWorkspaceDidActivateApplicationNotification 受信時に即座にチェック
+                _ = self.notify_rx.recv() => {
+                    log::debug!("Received NSWorkspace notification");
+                    if let Err(e) = self.execute_task().await {
+                        log::error!("Failed to execute task: {}", e);
+                    }
                 }
             }
         }
-        Ok(())
     }
 
     async fn execute_task(&mut self) -> Result<()> {
         let app_event = check_application().await;
-        dbg!(&app_event);
 
         if self.is_same(&app_event) {
             log::debug!("Same as the last application event");
@@ -200,22 +208,6 @@ pub struct Args {
     config: Option<String>,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    env_logger::init();
-    // env_logger::from_env(env_logger::Env::default().default_filter_or("debug")).init();
-
-    let args = Args::parse();
-    let config = args.config.as_deref().unwrap_or_default().into();
-    println!("CONFIG {}", serde_json::to_string(&config)?);
-
-    log::info!("Starting {}.", AGENT_NAME);
-    let mut agent = ApplicationAgent::new(config);
-    agent.run().await?;
-
-    Ok(())
-}
-
 async fn check_application() -> Option<ApplicationEvent> {
     log::debug!("check_application");
     match get_active_window() {
@@ -260,14 +252,102 @@ fn parse_line(line: &str) -> Option<(&str, &str)> {
     }
 }
 
-// fn get_config(config: &AgentConfig, _args: &str) -> Result<()> {
-//     println!("CONFIG {}", serde_json::to_string(config)?);
-//     Ok(())
-// }
+#[cfg(target_os = "macos")]
+mod macos {
+    use cocoa::base::{nil, id};
+    use cocoa::foundation::NSAutoreleasePool;
+    use objc::runtime::{Object, Sel};
+    use objc::{class, msg_send, sel, sel_impl};
+    use std::sync::OnceLock;
+    use tokio::sync::mpsc::Sender;
 
-// fn set_config(config: &mut AgentConfig, args: &str) -> Result<()> {
-//     let new_config: AgentConfig = serde_json::from_str(args)?;
-//     *config = new_config;
-//     // TODO: it's necessary to restart for the new config to take effect
-//     Ok(())
-// }
+    // Hold the channel sender globally (shared across threads)
+    pub static NOTIFY_SENDER: OnceLock<Sender<()>> = OnceLock::new();
+
+    extern "C" {
+        static NSWorkspaceDidActivateApplicationNotification: *mut Object;
+    }
+
+    // Function called from NSWorkspace notification callback
+    #[no_mangle]
+    pub extern "C" fn notify_active_app_changed() {
+        if let Some(sender) = NOTIFY_SENDER.get() {
+            // Send signal to async channel (ignore failure)
+            let _ = sender.try_send(());
+        }
+    }
+
+    extern "C" fn application_did_finish_launching(this: &mut Object, _sel: Sel, _notif: id) {
+        unsafe {
+            let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+            let notification_center: id = msg_send![workspace, notificationCenter];
+            let _: () = msg_send![notification_center,
+                addObserver: this
+                selector: sel!(workspace_app_activated:)
+                name: NSWorkspaceDidActivateApplicationNotification
+                object: nil];
+        }
+    }
+
+    extern "C" fn handle_workspace_app_activated(_this: &mut Object, _sel: Sel, _notif: id) {
+        // Send signal upon receiving notification
+        notify_active_app_changed();
+    }
+
+    pub fn run_macos_event_loop() {
+        unsafe {
+            let pool = cocoa::foundation::NSAutoreleasePool::new(cocoa::base::nil);
+            let cls = {
+                let mut decl = objc::declare::ClassDecl::new("AppDelegate", class!(NSObject)).unwrap();
+                decl.add_method(
+                    sel!(applicationDidFinishLaunching:),
+                    application_did_finish_launching as extern "C" fn(&mut Object, Sel, id),
+                );
+                decl.add_method(
+                    sel!(workspace_app_activated:),
+                    handle_workspace_app_activated as extern "C" fn(&mut Object, Sel, id),
+                );
+                decl.register()
+            };
+            let app = cocoa::appkit::NSApplication::sharedApplication(cocoa::base::nil);
+            let delegate: *mut Object = msg_send![cls, new];
+            let () = msg_send![app, setDelegate: delegate];
+            let () = msg_send![app, run];
+            pool.drain();
+        }
+    }
+}
+
+fn main() -> Result<()> {
+    // Initialize logs and arguments
+    env_logger::init();
+    let args = Args::parse();
+    let config = args.config.as_deref().unwrap_or_default().into();
+    println!("CONFIG {}", serde_json::to_string(&config)?);
+    log::info!("Starting {}.", AGENT_NAME);
+
+    // Create a channel to transmit NSWorkspace notifications to async tasks
+    let (tx, rx) = tokio::sync::mpsc::channel(100);
+
+    #[cfg(target_os = "macos")]
+    {
+        macos::NOTIFY_SENDER.set(tx).unwrap();
+    }
+
+    // Execute asynchronous processing (such as application task processing) in a background thread
+    let runtime = tokio::runtime::Runtime::new()?;
+    let agent_handle = std::thread::spawn(move || {
+         let mut agent = ApplicationAgent::new(config, rx);
+         runtime.block_on(async { agent.run().await }).unwrap();
+    });
+
+    #[cfg(target_os = "macos")]
+    {
+        // Start the Cocoa event loop on the main thread
+        macos::run_macos_event_loop();
+    }
+
+    agent_handle.join().unwrap();
+
+    Ok(())
+}
