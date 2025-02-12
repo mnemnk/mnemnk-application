@@ -4,7 +4,7 @@ use active_win_pos_rs::get_active_window;
 use anyhow::Result;
 use chrono::Utc;
 use clap::Parser;
-use log::{debug, error, info};
+use log;
 use serde_json::Value;
 use tokio::io::{stdin, AsyncBufReadExt, BufReader};
 use tokio::signal::ctrl_c;
@@ -104,20 +104,20 @@ impl ApplicationAgent {
                 // Wait for next interval tick
                 _ = interval.tick() => {
                     if let Err(e) = self.execute_task().await {
-                        error!("Failed to execute task: {}", e);
+                        log::error!("Failed to execute task: {}", e);
                     }
                 }
                 // Read from stdin
                 _ = reader.read_line(&mut line) => {
                     if let Err(e) = self.process_line(&line).await {
-                        error!("Failed to process line: {}", e);
+                        log::error!("Failed to process line: {}", e);
                     }
                     line.clear();
                 }
 
                 // Handle Ctrl+C
                 _ = ctrl_c() => {
-                    info!("\nShutting down mnemnk-application.");
+                    log::info!("\nShutting down mnemnk-application.");
                     break;
                 }
             }
@@ -127,6 +127,7 @@ impl ApplicationAgent {
 
     async fn execute_task(&mut self) -> Result<()> {
         let app_event = check_application().await;
+        dbg!(&app_event);
 
         if self.is_same(&app_event) {
             log::debug!("Same as the last application event");
@@ -173,7 +174,7 @@ impl ApplicationAgent {
     }
 
     async fn process_line(&self, line: &str) -> Result<()> {
-        debug!("process_line: {}", line);
+        log::debug!("process_line: {}", line);
 
         if let Some((cmd, _args)) = parse_line(line) {
             match cmd {
@@ -185,7 +186,7 @@ impl ApplicationAgent {
                     std::process::exit(0);
                 }
                 _ => {
-                    error!("Unknown command: {}", cmd);
+                    log::error!("Unknown command: {}", cmd);
                 }
             }
         }
@@ -208,7 +209,7 @@ async fn main() -> Result<()> {
     let config = args.config.as_deref().unwrap_or_default().into();
     println!("CONFIG {}", serde_json::to_string(&config)?);
 
-    info!("Starting {}.", AGENT_NAME);
+    log::info!("Starting {}.", AGENT_NAME);
     let mut agent = ApplicationAgent::new(config);
     agent.run().await?;
 
@@ -216,7 +217,7 @@ async fn main() -> Result<()> {
 }
 
 async fn check_application() -> Option<ApplicationEvent> {
-    debug!("check_application");
+    log::debug!("check_application");
     match get_active_window() {
         Ok(win) => {
             // let path = win.process_path.to_string_lossy().to_string();
@@ -235,7 +236,10 @@ async fn check_application() -> Option<ApplicationEvent> {
             };
             Some(info)
         }
-        Err(_) => None,
+        _ => {
+            log::error!("Failed to get active window");
+            None
+        }
     }
 }
 
