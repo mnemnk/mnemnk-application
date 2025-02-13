@@ -1,9 +1,18 @@
 [package]
 name = "mnemnk-application"
-version = "0.2.0"
+version = "0.2.1"
 description = "Mnemnk agent for monitoring application usage"
 authors = ["Akira Ishino <akira@lumilab.jp>"]
 edition = "2021"
+readme = "README.md"
+repository = "https://github.com/mnemnk/mnemnk-application"
+license = "MIT"
+
+[[bin]]
+name = "mnemnk-application"
+path = "src/main.rs"
+test = false
+bench = false
 
 [dependencies]
 active-win-pos-rs = "0.9.0"

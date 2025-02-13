@@ -103,13 +103,12 @@ impl ApplicationAgent {
         // Main loop with graceful shutdown
         loop {
             tokio::select! {
-                // Wait for next interval tick
                 _ = interval.tick() => {
                     if let Err(e) = self.execute_task().await {
                         log::error!("Failed to execute task: {}", e);
                     }
                 }
-                // Read from stdin
+
                 _ = reader.read_line(&mut line) => {
                     if let Err(e) = self.process_line(&line).await {
                         log::error!("Failed to process line: {}", e);
@@ -117,13 +116,13 @@ impl ApplicationAgent {
                     line.clear();
                 }
 
-                // Handle Ctrl+C
                 _ = ctrl_c() => {
                     log::info!("\nShutting down mnemnk-application.");
                     std::process::exit(0);
                 }
 
-                // macOS: NSWorkspaceDidActivateApplicationNotification 受信時に即座にチェック
+                // (macOS) check on NSWorkspaceDidActivateApplicationNotification
+                // TODO: add support for other platforms
                 _ = self.notify_rx.recv() => {
                     log::debug!("Received NSWorkspace notification");
                     if let Err(e) = self.execute_task().await {
@@ -254,6 +253,8 @@ fn parse_line(line: &str) -> Option<(&str, &str)> {
 
 #[cfg(target_os = "macos")]
 mod macos {
+    // based on https://github.com/dimusic/active-window-macos-example
+
     use cocoa::base::{nil, id};
     use cocoa::foundation::NSAutoreleasePool;
     use objc::runtime::{Object, Sel};
@@ -261,18 +262,15 @@ mod macos {
     use std::sync::OnceLock;
     use tokio::sync::mpsc::Sender;
 
-    // Hold the channel sender globally (shared across threads)
     pub static NOTIFY_SENDER: OnceLock<Sender<()>> = OnceLock::new();
 
     extern "C" {
         static NSWorkspaceDidActivateApplicationNotification: *mut Object;
     }
 
-    // Function called from NSWorkspace notification callback
     #[no_mangle]
     pub extern "C" fn notify_active_app_changed() {
         if let Some(sender) = NOTIFY_SENDER.get() {
-            // Send signal to async channel (ignore failure)
             let _ = sender.try_send(());
         }
     }
@@ -290,7 +288,6 @@ mod macos {
     }
 
     extern "C" fn handle_workspace_app_activated(_this: &mut Object, _sel: Sel, _notif: id) {
-        // Send signal upon receiving notification
         notify_active_app_changed();
     }
 
@@ -319,22 +316,19 @@ mod macos {
 }
 
 fn main() -> Result<()> {
-    // Initialize logs and arguments
     env_logger::init();
     let args = Args::parse();
     let config = args.config.as_deref().unwrap_or_default().into();
     println!("CONFIG {}", serde_json::to_string(&config)?);
     log::info!("Starting {}.", AGENT_NAME);
 
-    // Create a channel to transmit NSWorkspace notifications to async tasks
-    let (tx, rx) = tokio::sync::mpsc::channel(100);
+    let (_tx, rx) = tokio::sync::mpsc::channel(100);
 
     #[cfg(target_os = "macos")]
     {
-        macos::NOTIFY_SENDER.set(tx).unwrap();
+        macos::NOTIFY_SENDER.set(_tx).unwrap();
     }
 
-    // Execute asynchronous processing (such as application task processing) in a background thread
     let runtime = tokio::runtime::Runtime::new()?;
     let agent_handle = std::thread::spawn(move || {
          let mut agent = ApplicationAgent::new(config, rx);
@@ -343,7 +337,6 @@ fn main() -> Result<()> {
 
     #[cfg(target_os = "macos")]
     {
-        // Start the Cocoa event loop on the main thread
         macos::run_macos_event_loop();
     }
 
