@@ -5,7 +5,7 @@
 ## Installation
 
 ```shell
-cargo install --git https://github.com/mnemnk/mnemnk-application
+cargo install mnemnk-application
 ```
 
 ## Setup
