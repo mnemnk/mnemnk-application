@@ -5,6 +5,7 @@ use anyhow::Result;
 use chrono::Utc;
 use clap::Parser;
 use log;
+use schemars::{schema_for, JsonSchema};
 use serde_json::Value;
 use tokio::io::{stdin, AsyncBufReadExt, BufReader};
 use tokio::signal::ctrl_c;
@@ -13,9 +14,16 @@ use tokio::time;
 const AGENT_NAME: &str = "mnemnk-application";
 const KIND: &str = "application";
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+/// # Application
+/// Monitor active applications
+#[derive(Debug, serde::Deserialize, serde::Serialize, JsonSchema)]
 struct AgentConfig {
+    /// # Interval
+    /// Interval in seconds
     interval: u64,
+
+    /// # Ignore applications
+    /// Applications to ignore
     ignore: Vec<String>,
 }
 
@@ -319,6 +327,10 @@ fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
     let config = args.config.as_deref().unwrap_or_default().into();
+
+    let schema = schema_for!(AgentConfig);
+    println!("CONFIG_SCHEMA {}", serde_json::to_string(&schema)?);
+
     println!("CONFIG {}", serde_json::to_string(&config)?);
     log::info!("Starting {}.", AGENT_NAME);
 
