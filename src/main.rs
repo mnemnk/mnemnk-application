@@ -216,10 +216,19 @@ pub struct Args {
 }
 
 async fn check_application() -> Option<ApplicationEvent> {
+    const MAX_TITLE_LEN: usize = 250;
+
     log::debug!("check_application");
     match get_active_window() {
-        Ok(win) => {
-            // let path = win.process_path.to_string_lossy().to_string();
+        Ok(mut win) => {
+            // sanitize app_name and title
+            if win.app_name.is_empty() {
+                return None;
+            }
+            if win.title.chars().count() > MAX_TITLE_LEN {
+                win.title = win.title.chars().take(MAX_TITLE_LEN).collect();
+            };
+
             let text = format!("{} {}", win.app_name, win.title).trim().to_string();
             let info = ApplicationEvent {
                 t: Utc::now().timestamp_millis(),
