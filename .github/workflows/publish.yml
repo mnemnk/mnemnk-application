@@ -1,0 +1,71 @@
+name: 'publish'
+on:
+  push:
+    tags:
+      - 'v[0-9]+\.[0-9]+\.[0-9]+'
+env:
+  PROJECT_NAME: mnemnk-application
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - name: win-amd64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - name: macos-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+
+    runs-on: ${{ matrix.runner }}
+ 
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+ 
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+ 
+      - name: build binary
+        run: cargo build --verbose --locked --release --target ${{ matrix.target }}
+ 
+      - name: rename binary
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          BIN_SUFFIX=""
+          if [[ "${{ matrix.runner }}" == "windows-latest" ]]; then
+            BIN_SUFFIX=".exe"
+          fi
+ 
+          # The built binary output location
+          BIN_OUTPUT_DIR="target/${{ matrix.target }}/release"
+          BIN_OUTPUT="${BIN_OUTPUT_DIR}/${PROJECT_NAME}${BIN_SUFFIX}"
+ 
+          # Define a better name for the final binary
+          BIN_RELEASE="${PROJECT_NAME}-${{ matrix.name }}${BIN_SUFFIX}"
+          BIN_RELEASE_VERSIONED="${PROJECT_NAME}-${GITHUB_REF_NAME}-${{ matrix.name }}${BIN_SUFFIX}"
+ 
+          # Rename the built binary
+          mv "${BIN_OUTPUT}" "${BIN_OUTPUT_DIR}/${BIN_RELEASE_VERSIONED}"
+
+          echo "BIN_RELEASE_FILE=${BIN_OUTPUT_DIR}/${BIN_RELEASE_VERSIONED}" >> $GITHUB_ENV
+    
+      - name: release binary
+        uses: softprops/action-gh-release@v2
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            BIN_RELEASE_FILE: ${{ env.BIN_RELEASE_FILE }}
+        with:
+          draft: true
+          files: ${{ env.BIN_RELEASE_FILE }}
