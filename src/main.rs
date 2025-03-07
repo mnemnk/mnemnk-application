@@ -157,7 +157,7 @@ impl ApplicationAgent {
         if let Some(app_event) = app_event {
             // debug!("check_application: {:?}", app_event);
             let app_event_json = serde_json::to_string(&app_event)?;
-            println!("STORE {} {}", KIND, app_event_json);
+            println!(".STORE {} {}", KIND, app_event_json);
         }
         Ok(())
     }
@@ -196,7 +196,7 @@ impl ApplicationAgent {
                 // "GET_CONFIG" => {
                 //     println!("CONFIG {}", serde_json::to_string(&self.config)?);
                 // }
-                "QUIT" => {
+                ".QUIT" => {
                     log::info!("QUIT {}.", AGENT_NAME);
                     std::process::exit(0);
                 }
@@ -338,9 +338,9 @@ fn main() -> Result<()> {
     let config = args.config.as_deref().unwrap_or_default().into();
 
     let schema = schema_for!(AgentConfig);
-    println!("CONFIG_SCHEMA {}", serde_json::to_string(&schema)?);
+    println!(".CONFIG_SCHEMA {}", serde_json::to_string(&schema)?);
 
-    println!("CONFIG {}", serde_json::to_string(&config)?);
+    println!(".CONFIG {}", serde_json::to_string(&config)?);
     log::info!("Starting {}.", AGENT_NAME);
 
     let (_tx, rx) = tokio::sync::mpsc::channel(100);
