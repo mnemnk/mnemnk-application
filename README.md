@@ -29,8 +29,8 @@ Save the settings and restart Mnemnk.
 ```shell
 > cargo run
 
-CONFIG {"interval":10,"ignore":["LockApp.exe"]}
-STORE application {"t":1739435029568,"name":"Visual Studio Code","title":"README.md - mnemnk-application - Visual Studio Code","x":1136,"y":152,"width":2733,"height":1737,"text":"Visual Studio Code README.md - mnemnk-application - Visual Studio Code"}
+.CONFIG {"interval":10,"ignore":["LockApp.exe"]}
+.STORE application {"t":1739435029568,"name":"Visual Studio Code","title":"README.md - mnemnk-application - Visual Studio Code","x":1136,"y":152,"width":2733,"height":1737,"text":"Visual Studio Code README.md - mnemnk-application - Visual Studio Code"}
 ...
 ```
 
