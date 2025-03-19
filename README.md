@@ -4,35 +4,11 @@
 
 ## Installation
 
-```shell
-cargo install mnemnk-application
-```
+1. Create a directory named `mnemnk-application` under `${mnemnk_dir}/agents/`. `${mnemnk_dir}` is the directory specified in the Mnemnk App settings, and the `agents` directory should already be automatically created.
+2. Download the binary from the release page and place it under the newly created `mnemnk-application` directory. When doing so, remove the suffix like `-v0.5.0-macos-arm64` or `-v0.5.0-win-amd64` from the file name, and rename it to `mnemnk-application` for mac or `mnemnk-application.exe` for Windows.
+3. Download `mnemnk.mac.json` or `mnemnk.win.json`, rename it to `mnemnk.json`, and place it in the same `mnemnk-application` directory.
 
-## Setup
-
-`mnemnk-application` is enabled by default. After installation, restart Mnemnk and it should be running.
-
-If it is not enabled, please edit Settings in Mnemnk as follows
-
-```json
-  "agents": {
-    "application": {
-      "enabled": true
-    },
-    ...
-```
-
-Save the settings and restart Mnemnk.
-
-## Development
-
-```shell
-> cargo run
-
-.CONFIG {"interval":10,"ignore":["LockApp.exe"]}
-.STORE application {"t":1739435029568,"name":"Visual Studio Code","title":"README.md - mnemnk-application - Visual Studio Code","x":1136,"y":152,"width":2733,"height":1737,"text":"Visual Studio Code README.md - mnemnk-application - Visual Studio Code"}
-...
-```
+After installation, restart Mnemnk and `Application` should be appear in Agents page.
 
 ## License
 
