@@ -5,7 +5,6 @@ use anyhow::Result;
 use chrono::Utc;
 use clap::Parser;
 use log;
-use schemars::{schema_for, JsonSchema};
 use serde_json::Value;
 use tokio::io::{stdin, AsyncBufReadExt, BufReader};
 use tokio::signal::ctrl_c;
@@ -14,15 +13,11 @@ use tokio::time;
 const AGENT_NAME: &str = "mnemnk-application";
 const KIND: &str = "application";
 
-/// # Application
-/// Monitor active applications
-#[derive(Debug, serde::Deserialize, serde::Serialize, JsonSchema)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct AgentConfig {
-    /// # Interval
     /// Interval in seconds
     interval: u64,
 
-    /// # Ignore applications
     /// Applications to ignore
     ignore: Vec<String>,
 }
@@ -95,7 +90,7 @@ struct ApplicationAgent {
 impl ApplicationAgent {
     fn new(config: AgentConfig, notify_rx: tokio::sync::mpsc::Receiver<()>) -> Self {
         Self {
-            ignore: config.ignore.clone().into_iter().collect(),
+            ignore: config.ignore.iter().cloned().collect(),
             config,
             last_event: None,
             notify_rx,
@@ -104,6 +99,7 @@ impl ApplicationAgent {
 
     async fn run(&mut self) -> Result<()> {
         let mut interval = time::interval(time::Duration::from_secs(self.config.interval));
+        let mut last_interval_period = self.config.interval;
 
         let mut reader = BufReader::new(stdin());
         let mut line = String::new();
@@ -114,6 +110,10 @@ impl ApplicationAgent {
                 _ = interval.tick() => {
                     if let Err(e) = self.execute_task().await {
                         log::error!("Failed to execute task: {}", e);
+                    }
+                    if last_interval_period != self.config.interval {
+                        interval = time::interval(time::Duration::from_secs(self.config.interval));
+                        last_interval_period = self.config.interval;
                     }
                 }
 
@@ -157,7 +157,7 @@ impl ApplicationAgent {
         if let Some(app_event) = app_event {
             // debug!("check_application: {:?}", app_event);
             let app_event_json = serde_json::to_string(&app_event)?;
-            println!(".STORE {} {}", KIND, app_event_json);
+            println!(".OUT {} {}", KIND, app_event_json);
         }
         Ok(())
     }
@@ -188,14 +188,17 @@ impl ApplicationAgent {
         false
     }
 
-    async fn process_line(&self, line: &str) -> Result<()> {
+    async fn process_line(&mut self, line: &str) -> Result<()> {
         log::debug!("process_line: {}", line);
 
-        if let Some((cmd, _args)) = parse_line(line) {
+        if let Some((cmd, args)) = parse_line(line) {
             match cmd {
-                // "GET_CONFIG" => {
-                //     println!("CONFIG {}", serde_json::to_string(&self.config)?);
-                // }
+                ".CONFIG" => {
+                    let config = AgentConfig::from(args);
+                    log::info!("Updated config: {:?}", config);
+                    self.config.ignore = config.ignore.iter().cloned().collect();
+                    self.config = config;
+                }
                 ".QUIT" => {
                     log::info!("QUIT {}.", AGENT_NAME);
                     std::process::exit(0);
@@ -337,10 +340,6 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let config = args.config.as_deref().unwrap_or_default().into();
 
-    let schema = schema_for!(AgentConfig);
-    println!(".CONFIG_SCHEMA {}", serde_json::to_string(&schema)?);
-
-    println!(".CONFIG {}", serde_json::to_string(&config)?);
     log::info!("Starting {}.", AGENT_NAME);
 
     let (_tx, rx) = tokio::sync::mpsc::channel(100);
