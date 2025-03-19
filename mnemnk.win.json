@@ -1,0 +1,22 @@
+{
+    "name": "mnemnk-application",
+    "title": "Application",
+    "description": "application activity",
+    "outputs": ["application"],
+    "default_config": {
+        "interval": {
+            "value": 10,
+            "type": "integer",
+            "title": "Interval",
+            "description": "Interval in seconds"
+        },
+        "ignore": {
+            "value": [
+                "LockApp.exe"
+            ],
+            "type": "string[]",
+            "title": "Ignore applications",
+            "description": "Applications to ignore"
+        }
+    }
+}
