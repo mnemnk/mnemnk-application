@@ -196,7 +196,7 @@ impl ApplicationAgent {
                 ".CONFIG" => {
                     let config = AgentConfig::from(args);
                     log::info!("Updated config: {:?}", config);
-                    self.config.ignore = config.ignore.iter().cloned().collect();
+                    self.ignore = config.ignore.iter().cloned().collect();
                     self.config = config;
                 }
                 ".QUIT" => {
