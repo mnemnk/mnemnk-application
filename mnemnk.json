@@ -12,7 +12,8 @@
         },
         "ignore": {
             "value": [
-                "LockApp.exe"
+                "LockApp.exe",
+                "scrnsave.scr"
             ],
             "type": "string[]",
             "title": "Ignore applications",
