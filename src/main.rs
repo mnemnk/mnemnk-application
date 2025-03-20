@@ -26,24 +26,9 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             interval: 10,
-            ignore: default_ignore(),
+            ignore: Vec::default(),
         }
     }
-}
-
-#[cfg(target_os = "linux")]
-fn default_ignore() -> Vec<String> {
-    vec![]
-}
-
-#[cfg(target_os = "macos")]
-fn default_ignore() -> Vec<String> {
-    vec!["scrnsave.scr".to_string()]
-}
-
-#[cfg(target_os = "windows")]
-fn default_ignore() -> Vec<String> {
-    vec!["LockApp.exe".to_string()]
 }
 
 impl From<&str> for AgentConfig {
