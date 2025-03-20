@@ -65,4 +65,6 @@ jobs:
             BIN_RELEASE_FILE: ${{ env.BIN_RELEASE_FILE }}
         with:
           draft: true
-          files: ${{ env.BIN_RELEASE_FILE }}
+          files: |
+            mnemnk.json
+            ${{ env.BIN_RELEASE_FILE }}
