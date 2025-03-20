@@ -1,6 +1,6 @@
 [package]
 name = "mnemnk-application"
-version = "0.5.0"
+version = "0.5.1"
 description = "Mnemnk agent for monitoring application usage"
 authors = ["Akira Ishino <akira@lumilab.jp>"]
 edition = "2021"
